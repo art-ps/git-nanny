@@ -1,0 +1,178 @@
+.TH GIT-NANNY 1 "2026-08-13" "git-nanny" "Git Extensions"
+.SH NAME
+git\-nanny \- clean up dead local git branches
+.SH SYNOPSIS
+.B git nanny
+.RI [ options ]
+.br
+.B git nanny restore
+.br
+.B git nanny \-\-version
+.SH DESCRIPTION
+.B git\-nanny
+lists local branches sorted by how dead they are and deletes the ones you pick.
+It finds branches that were merged normally, branches that were merged with a
+squash commit, branches whose upstream was deleted on the remote, and branches
+nobody has touched for months.
+.PP
+Squash merges are the reason this tool exists:
+.B git branch \-\-merged
+does not list them, so the usual one\-liner leaves most of the graveyard behind.
+.PP
+Run with no scope flag and a terminal attached, git\-nanny opens an interactive
+list. Without a terminal, or with a scope flag, it works non\-interactively.
+.PP
+Every deletion is written to a journal first, so any branch can be restored
+afterwards. See
+.B JOURNAL
+below.
+.SH CATEGORIES
+Each branch gets exactly one category, which also sets the sort order.
+.TP
+.B merged
+Contained in the default branch, either as an ancestor or through a squash
+merge. Preselected in the interactive list.
+.TP
+.B upstream gone
+The branch tracked a remote branch that no longer exists \- usually a merged
+pull request. Preselected in the interactive list.
+.TP
+.B stale
+No commits for longer than
+.BR \-\-stale\-days ,
+and no upstream. Not preselected.
+.TP
+.B active
+Everything else. Not preselected.
+.SH OPTIONS
+.TP
+.B \-merged
+Merged branches only.
+.TP
+.B \-all\-but\-default
+Every branch except the default one and the protected ones.
+.TP
+.B \-yes
+Run without asking. Required for any non\-interactive deletion.
+.TP
+.B \-dry\-run
+Only show the plan, delete nothing.
+.TP
+.B \-force
+Also delete branches that have commits the default branch does not.
+.TP
+.BI \-stale\-days " n"
+Days without commits before a branch counts as abandoned. Default 90.
+.TP
+.BI \-default\-branch " name"
+Default branch name. Overrides autodetection.
+.TP
+.BI \-protect " glob"
+Glob of protected branches. May be repeated.
+.TP
+.B \-version
+Print the version and exit.
+.PP
+Without
+.B \-merged
+or
+.BR \-all\-but\-default ,
+a non\-interactive run deletes nothing: it prints the branch list and asks you
+to name a scope. Branches with unique commits are skipped unless
+.B \-force
+is given.
+.SH COMMANDS
+.TP
+.B restore
+List the branches this tool deleted in the current repository, newest first,
+with the commit each one pointed at.
+.SH PROTECTION
+These branches are never deleted, with or without
+.BR \-force :
+the current branch, the default branch, any branch checked out in another
+worktree, and any branch matching a protection pattern.
+.PP
+Patterns come from the
+.B \-protect
+flag and from git config:
+.PP
+.RS
+git config \-\-add nanny.protect 'release/*'
+.RE
+.PP
+A pattern also protects branches below it, so
+.I release/*
+covers
+.IR release/v2/hotfix .
+.PP
+The default branch is resolved in this order: the
+.B nanny.defaultBranch
+git config value,
+.IR origin/HEAD ,
+.IR main ,
+.IR master ,
+and finally the current branch \- but only when it is the only branch in the
+repository. If none of these resolve, git\-nanny refuses to delete anything and
+tells you how to name the default branch explicitly.
+.SH JOURNAL
+Before each deletion a line is appended to
+.IR $XDG_STATE_HOME/git\-nanny/deleted.jsonl ,
+by default
+.IR ~/.local/state/git\-nanny/deleted.jsonl ,
+recording the repository, the branch, the commit and the time. If that write
+fails, the branch is not deleted: an unrecorded deletion cannot be undone.
+.PP
+The journal is keyed on the repository root, so
+.B git nanny restore
+finds the same records from any subdirectory. Deleted commits stay in the
+object database until git collects garbage, which is at least two weeks by
+default.
+.SH EXAMPLES
+Interactive list:
+.PP
+.RS
+git nanny
+.RE
+.PP
+Delete merged branches, including squash\-merged ones:
+.PP
+.RS
+git nanny \-\-merged \-\-yes
+.RE
+.PP
+Delete everything except the default branch:
+.PP
+.RS
+git nanny \-\-all\-but\-default \-\-yes
+.RE
+.PP
+See what would happen, and what was deleted before:
+.PP
+.RS
+git nanny \-\-dry\-run
+.br
+git nanny restore
+.RE
+.SH FILES
+.TP
+.I ~/.local/state/git\-nanny/deleted.jsonl
+Journal of deleted branches. Honours
+.BR XDG_STATE_HOME .
+.SH EXIT STATUS
+.TP
+.B 0
+Success, or nothing to do.
+.TP
+.B 1
+At least one branch could not be deleted or journaled, or the default branch
+could not be determined.
+.TP
+.B 2
+Unknown subcommand.
+.SH SEE ALSO
+.BR git\-branch (1),
+.BR git\-worktree (1)
+.SH BUGS
+Report at https://github.com/art\-ps/git\-nanny/issues
+.SH AUTHOR
+Artem Pisarev

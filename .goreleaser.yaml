@@ -34,6 +34,7 @@ archives:
     files:
       - README.md
       - LICENSE
+      - man/git-nanny.1
 
 checksum:
   name_template: 'checksums.txt'
@@ -73,6 +74,7 @@ brews:
       email: bot@goreleaser.com
     install: |
       bin.install "git-nanny"
+      man1.install "man/git-nanny.1"
     test: |
       system "git", "init", "-q", "-b", "main", testpath
       system "git", "-C", testpath, "commit", "-q", "--allow-empty", "-m", "init"

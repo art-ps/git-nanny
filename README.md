@@ -30,6 +30,9 @@ Homebrew (macOS и Linux):
 
 ## Как пользоваться
 
+Полная справка — `git nanny --help` (man-страница ставится вместе с бинарём
+через Homebrew; при `go install` её кладёт `make install-man`).
+
     git nanny                          # интерактивный список
     git nanny --merged --yes           # снести вмёрженные
     git nanny --all-but-default --yes  # снести всё, кроме основной
