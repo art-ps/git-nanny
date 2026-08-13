@@ -19,7 +19,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w
+      - -s -w -X main.version={{.Version}}
 
 archives:
   - id: default
@@ -33,6 +33,7 @@ archives:
     formats: [tar.gz]
     files:
       - README.md
+      - LICENSE
 
 checksum:
   name_template: 'checksums.txt'
@@ -66,6 +67,7 @@ brews:
     directory: Formula
     homepage: 'https://github.com/art-ps/git-nanny'
     description: 'Cleans up dead local git branches: merged, squash-merged and forgotten'
+    license: 'MIT'
     commit_author:
       name: goreleaserbot
       email: bot@goreleaser.com

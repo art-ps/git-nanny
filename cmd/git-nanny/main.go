@@ -10,6 +10,10 @@ import (
 	"github.com/art-ps/git-nanny/internal/journal"
 )
 
+// version подставляется линковщиком при релизной сборке (-X main.version=...);
+// при сборке из исходников остаётся dev.
+var version = "dev"
+
 // terminalAvailable — есть ли управляющий терминал. Проверяем ровно то, что
 // открывает Bubble Tea: перенаправленный stdin бывает символьным устройством
 // (/dev/null), поэтому os.ModeCharDevice тут не показатель.
@@ -30,6 +34,8 @@ func (m *multiFlag) Set(s string) error { *m = append(*m, s); return nil }
 func main() {
 	var o Options
 	var protect multiFlag
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false, "показать версию и выйти")
 	flag.BoolVar(&o.Merged, "merged", false, "только вмёрженные ветки")
 	flag.BoolVar(&o.AllButDefault, "all-but-default", false, "все ветки, кроме основной и защищённых")
 	flag.BoolVar(&o.DryRun, "dry-run", false, "только показать план")
@@ -40,6 +46,11 @@ func main() {
 	flag.Var(&protect, "protect", "шаблон защищённых веток (можно повторять)")
 	flag.Parse()
 	o.Protect = protect
+
+	if showVersion {
+		fmt.Println("git-nanny " + version)
+		return
+	}
 
 	dir, err := os.Getwd()
 	if err != nil {
