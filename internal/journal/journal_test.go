@@ -1,6 +1,7 @@
 package journal
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -37,5 +38,13 @@ func TestForRepoOnMissingFile(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatal("ждали пустой список")
+	}
+}
+
+func TestPathIsAlwaysAbsolute(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	t.Setenv("HOME", "")
+	if p := Path(); !filepath.IsAbs(p) {
+		t.Fatalf("путь журнала %q относительный — журнал расползётся по рабочим каталогам", p)
 	}
 }

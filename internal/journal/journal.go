@@ -20,8 +20,14 @@ type Record struct {
 func Path() string {
 	base := os.Getenv("XDG_STATE_HOME")
 	if base == "" {
-		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".local", "state")
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			// без HOME писать в относительный путь нельзя: журнал расползётся
+			// по рабочим каталогам и перестанет быть единой страховкой
+			base = filepath.Join(os.TempDir(), "git-nanny-state")
+		} else {
+			base = filepath.Join(home, ".local", "state")
+		}
 	}
 	return filepath.Join(base, "git-nanny", "deleted.jsonl")
 }

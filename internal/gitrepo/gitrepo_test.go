@@ -151,4 +151,7 @@ func TestDeleteAndRestore(t *testing.T) {
 	if len(bs) != 1 || bs[0].Name != "doomed" {
 		t.Fatal("ветка не восстановлена")
 	}
+	if bs[0].Head != head {
+		t.Fatalf("ветка восстановлена на %s, ждали %s", bs[0].Head, head)
+	}
 }
