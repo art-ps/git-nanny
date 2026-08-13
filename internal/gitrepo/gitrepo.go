@@ -102,25 +102,36 @@ func (r *Repo) Branches(defaultBranch string) ([]classify.Branch, error) {
 			Current:      strings.TrimSpace(f[4]) == "*" || name == cur,
 			InWorktree:   inWorktree[name] && name != cur,
 		}
-		b.Ahead, b.Behind = r.aheadBehind(defaultBranch, name)
-		b.Merged = b.Ahead == 0 || r.squashMerged(defaultBranch, name)
+		ahead, behind, err := r.aheadBehind(defaultBranch, name)
+		if err != nil {
+			// не смогли посчитать — считаем ветку живой: пометить «вмёржена» здесь
+			// значит предложить удалить ветку с непонятным содержимым
+			b.Ahead, b.Behind, b.Merged = 1, 0, false
+		} else {
+			b.Ahead, b.Behind = ahead, behind
+			b.Merged = b.Ahead == 0 || r.squashMerged(defaultBranch, name)
+		}
 		res = append(res, b)
 	}
 	return res, nil
 }
 
-func (r *Repo) aheadBehind(base, name string) (ahead, behind int) {
+func (r *Repo) aheadBehind(base, name string) (ahead, behind int, err error) {
 	out, err := r.git("rev-list", "--left-right", "--count", base+"..."+name)
 	if err != nil {
-		return 0, 0
+		return 0, 0, err
 	}
 	f := strings.Fields(out)
 	if len(f) != 2 {
-		return 0, 0
+		return 0, 0, fmt.Errorf("неожиданный вывод rev-list: %q", out)
 	}
-	behind, _ = strconv.Atoi(f[0])
-	ahead, _ = strconv.Atoi(f[1])
-	return ahead, behind
+	if behind, err = strconv.Atoi(f[0]); err != nil {
+		return 0, 0, err
+	}
+	if ahead, err = strconv.Atoi(f[1]); err != nil {
+		return 0, 0, err
+	}
+	return ahead, behind, nil
 }
 
 // squashMerged: кладём дерево ветки поверх точки расхождения временным коммитом и

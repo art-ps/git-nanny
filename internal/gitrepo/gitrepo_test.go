@@ -97,3 +97,35 @@ func TestBranchesMarksCurrentAndUpstreamGone(t *testing.T) {
 		}
 	}
 }
+
+func TestAheadBehindErrorMeansNotMerged(t *testing.T) {
+	dir := newTestRepo(t)
+	gitIn(t, dir, "checkout", "-q", "-b", "feature")
+	commitFile(t, dir, "f.txt", "1")
+	gitIn(t, dir, "checkout", "-q", "main")
+
+	r, _ := Open(dir)
+	if _, _, err := r.aheadBehind("no-such-base", "feature"); err == nil {
+		t.Fatal("ждали ошибку на несуществующей базе")
+	}
+
+	bs, err := r.Branches("no-such-base")
+	if err != nil {
+		t.Fatalf("Branches не должен падать целиком: %v", err)
+	}
+	var found bool
+	for _, b := range bs {
+		if b.Name == "feature" {
+			found = true
+			if b.Merged {
+				t.Error("при сбое подсчёта ветка не должна считаться вмёрженной")
+			}
+			if b.Ahead == 0 {
+				t.Error("при сбое подсчёта ветка должна выглядеть имеющей уникальные коммиты")
+			}
+		}
+	}
+	if !found {
+		t.Error("ветка пропала из выдачи при сбое подсчёта")
+	}
+}
