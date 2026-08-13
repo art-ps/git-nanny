@@ -1,63 +1,70 @@
-# Нянька для веток
+# git-nanny
 
-Убирает кладбище локальных веток. Показывает, что вмёржено, что осталось от
-удалённых на сервере веток и что не трогали месяцами, — отмечаешь и сносишь пачкой.
+Cleans up the graveyard of local branches. Shows what was merged, what is left
+over from branches deleted on the remote, and what nobody has touched for
+months — you tick them off and delete the lot.
 
-собран за вечер · claude code + go · bubble tea
+built in one evening · claude code + go · bubble tea
 
-## Зачем, если есть однострочник
+## Why not the one-liner
 
-`git branch --merged | xargs git branch -d` не видит ветки, влитые **сквошем**, —
-а на GitHub и GitLab так вливается большинство. Не видит и ветки, чей upstream
-удалён после мержа. Нянька находит и те, и другие, а перед удалением пишет
-журнал, из которого любую ветку можно вернуть.
+`git branch --merged | xargs git branch -d` does not see branches merged with a
+**squash** commit — and that is how most pull requests land on GitHub and
+GitLab. It does not see branches whose upstream was deleted after the merge,
+either. git-nanny finds both, and writes a journal before deleting, so any
+branch can be brought back.
 
-## Установка
+## Install
 
-Homebrew (macOS и Linux):
+Homebrew (macOS and Linux):
 
     brew install art-ps/tap/git-nanny
 
-Или из исходников:
+Or from source:
 
     go install github.com/art-ps/git-nanny/cmd/git-nanny@latest
 
-Готовые бинарники под macOS и Linux (x86_64 и arm64) лежат в
-[релизах](https://github.com/art-ps/git-nanny/releases).
+Prebuilt binaries for macOS and Linux (x86_64 and arm64) are in the
+[releases](https://github.com/art-ps/git-nanny/releases).
 
-Бинарь называется `git-nanny`, поэтому git подхватывает его как подкоманду:
-работает и `git-nanny`, и `git nanny`.
+The binary is called `git-nanny`, so git picks it up as a subcommand: both
+`git-nanny` and `git nanny` work.
 
-## Как пользоваться
+## Usage
 
-Полная справка — `git nanny --help` (man-страница ставится вместе с бинарём
-через Homebrew; при `go install` её кладёт `make install-man`).
+Full reference: `git nanny --help` (Homebrew installs the man page alongside
+the binary; with `go install`, `make install-man` puts it in place).
 
-    git nanny                          # интерактивный список
-    git nanny --merged --yes           # снести вмёрженные
-    git nanny --all-but-default --yes  # снести всё, кроме основной
-    git nanny --dry-run                # только показать план
-    git nanny --stale-days 30          # порог заброшенности (по умолчанию 90)
-    git nanny restore                  # что удалялось и как вернуть
+    git nanny                          # interactive list
+    git nanny --merged --yes           # delete merged branches
+    git nanny --all-but-default --yes  # delete everything except the default one
+    git nanny --dry-run                # only show the plan
+    git nanny --stale-days 30          # abandonment threshold (90 by default)
+    git nanny restore                  # what was deleted and how to bring it back
 
-Без `--merged` или `--all-but-default` неинтерактивный запуск ничего не удаляет:
-печатает список веток и просит указать область явно.
+Without `--merged` or `--all-but-default` a non-interactive run deletes
+nothing: it prints the branch list and asks you to name a scope explicitly.
 
-Никогда не удаляются: текущая ветка, основная ветка, ветки в других worktree
-и всё, что попало под защиту:
+Never deleted: the current branch, the default branch, branches checked out in
+another worktree, and anything covered by protection:
 
     git config --add nanny.protect 'release/*'
     git nanny --protect wip
 
-Если основную ветку не удалось определить однозначно (нет `origin/HEAD`, нет
-`main`/`master`, веток несколько), нянька не удалит ничего и объяснит, как
-задать её явно: `git config nanny.defaultBranch <имя>` или `git nanny
---default-branch <имя>`.
+If the default branch cannot be resolved unambiguously (no `origin/HEAD`, no
+`main`/`master`, more than one branch), git-nanny deletes nothing and explains
+how to name it: `git config nanny.defaultBranch <name>` or
+`git nanny --default-branch <name>`.
 
-Ветки с уникальными коммитами относительно основной удаляются только с
-`--force` — в интерактивном списке они показаны серым с пометкой «has
-unique commits» и отметить их пробелом нельзя.
+Branches with commits the default branch does not have are only deleted with
+`--force` — in the interactive list they are dimmed and marked "has unique
+commits", and the spacebar will not select them.
 
-## Что нянька не делает
+## What it does not do
 
-Не трогает ветки на сервере, не сливает, не переключает. Только убирает локальное.
+It does not touch branches on the remote, does not merge, does not switch.
+Local cleanup only.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
