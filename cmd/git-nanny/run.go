@@ -9,6 +9,7 @@ import (
 	"github.com/art-ps/git-nanny/internal/classify"
 	"github.com/art-ps/git-nanny/internal/gitrepo"
 	"github.com/art-ps/git-nanny/internal/journal"
+	"github.com/art-ps/git-nanny/internal/ui"
 )
 
 type Options struct {
@@ -124,6 +125,56 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 		fmt.Fprintf(out, "удалена %s\n", e.Name)
 	}
 	fmt.Fprintf(out, "\nвосстановить: git nanny restore\n")
+	if failed > 0 {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+func RunInteractive(dir string, o Options, out io.Writer) (int, error) {
+	repo, err := gitrepo.Open(dir)
+	if err != nil {
+		return 1, err
+	}
+	def := repo.DefaultBranch()
+	branches, err := repo.Branches(def)
+	if err != nil {
+		return 1, err
+	}
+	now := time.Now()
+	protect := append(append([]string{}, repo.ProtectPatterns()...), o.Protect...)
+	entries := classify.Build(branches, def, protect, now, o.StaleDays)
+	if len(entries) == 0 {
+		fmt.Fprintf(out, "кроме %s веток нет — убирать нечего\n", def)
+		return 0, nil
+	}
+	chosen, err := ui.Select(entries, now, o.Force)
+	if err != nil {
+		return 1, err
+	}
+	if len(chosen) == 0 {
+		fmt.Fprintln(out, "ничего не выбрано")
+		return 0, nil
+	}
+	var failed int
+	for _, e := range chosen {
+		if err := journal.Append(journal.Record{
+			Repo: repo.Dir(), Branch: e.Name, Head: e.Head,
+			Category: e.Category.String(), At: time.Now(),
+		}); err != nil {
+			// без записи в журнал удаление необратимо — не удаляем
+			fmt.Fprintf(out, "%s пропущена: не удалось записать журнал (%v)\n", e.Name, err)
+			failed++
+			continue
+		}
+		if err := repo.Delete(e.Name, true); err != nil {
+			fmt.Fprintf(out, "не удалось удалить %s: %v\n", e.Name, err)
+			failed++
+			continue
+		}
+		fmt.Fprintf(out, "удалена %s\n", e.Name)
+	}
+	fmt.Fprintln(out, "\nвосстановить: git nanny restore")
 	if failed > 0 {
 		return 1, nil
 	}

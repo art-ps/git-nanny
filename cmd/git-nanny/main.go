@@ -42,6 +42,14 @@ func main() {
 		return
 	}
 
+	if !o.Merged && !o.AllButDefault && !o.DryRun {
+		code, err := RunInteractive(dir, o, os.Stdout)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		os.Exit(code)
+	}
+
 	code, err := Run(dir, o, os.Stdout)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
