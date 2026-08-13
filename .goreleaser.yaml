@@ -1,0 +1,77 @@
+version: 2
+
+project_name: git-nanny
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: git-nanny
+    main: ./cmd/git-nanny
+    binary: git-nanny
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    formats: [tar.gz]
+    files:
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: '{{ incpatch .Version }}-next'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: art-ps
+    name: git-nanny
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: git-nanny
+    repository:
+      owner: art-ps
+      name: homebrew-tap
+      token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
+    directory: Formula
+    homepage: 'https://github.com/art-ps/git-nanny'
+    description: 'Cleans up dead local git branches: merged, squash-merged and forgotten'
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    install: |
+      bin.install "git-nanny"
+    test: |
+      system "git", "init", "-q", "-b", "main", testpath
+      system "git", "-C", testpath, "commit", "-q", "--allow-empty", "-m", "init"
+      assert_match "убирать нечего", shell_output("cd #{testpath} && #{bin}/git-nanny --dry-run")

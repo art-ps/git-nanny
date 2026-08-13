@@ -14,7 +14,16 @@
 
 ## Установка
 
+Homebrew (macOS и Linux):
+
+    brew install art-ps/tap/git-nanny
+
+Или из исходников:
+
     go install github.com/art-ps/git-nanny/cmd/git-nanny@latest
+
+Готовые бинарники под macOS и Linux (x86_64 и arm64) лежат в
+[релизах](https://github.com/art-ps/git-nanny/releases).
 
 Бинарь называется `git-nanny`, поэтому git подхватывает его как подкоманду:
 работает и `git-nanny`, и `git nanny`.
