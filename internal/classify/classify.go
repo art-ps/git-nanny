@@ -21,13 +21,13 @@ const (
 func (c Category) String() string {
 	switch c {
 	case Merged:
-		return "вмёржена"
+		return "merged"
 	case Gone:
-		return "upstream удалён"
+		return "upstream gone"
 	case Stale:
-		return "давно не трогали"
+		return "stale"
 	default:
-		return "активная"
+		return "active"
 	}
 }
 
@@ -70,15 +70,15 @@ func Build(branches []Branch, defaultBranch string, protect []string, now time.T
 		e := Entry{Branch: b, Category: Classify(b, now, staleDays)}
 		switch {
 		case b.Current:
-			e.Protected, e.ProtectReason = true, "текущая"
+			e.Protected, e.ProtectReason = true, "current"
 		case b.Name == defaultBranch:
-			e.Protected, e.ProtectReason = true, "основная"
+			e.Protected, e.ProtectReason = true, "default"
 		case b.InWorktree:
-			e.Protected, e.ProtectReason = true, "занята worktree"
+			e.Protected, e.ProtectReason = true, "in use by a worktree"
 		default:
 			for _, pat := range protect {
 				if matchesProtect(pat, b.Name) {
-					e.Protected, e.ProtectReason = true, "защищена шаблоном "+pat
+					e.Protected, e.ProtectReason = true, "protected by pattern "+pat
 					break
 				}
 			}

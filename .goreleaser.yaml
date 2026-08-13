@@ -76,4 +76,4 @@ brews:
     test: |
       system "git", "init", "-q", "-b", "main", testpath
       system "git", "-C", testpath, "commit", "-q", "--allow-empty", "-m", "init"
-      assert_match "убирать нечего", shell_output("cd #{testpath} && #{bin}/git-nanny --dry-run")
+      assert_match "nothing to clean", shell_output("cd #{testpath} && #{bin}/git-nanny --dry-run")

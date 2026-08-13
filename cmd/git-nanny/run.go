@@ -23,8 +23,8 @@ type Options struct {
 	DefaultBranch string // побеждает автоопределение, если задан
 }
 
-const noDefaultBranchMsg = "не удалось определить основную ветку — " +
-	"задай её явно: git config nanny.defaultBranch <имя> или git nanny --default-branch <имя>"
+const noDefaultBranchMsg = "could not determine the default branch. " +
+	"set it explicitly: git config nanny.defaultBranch <name> or --default-branch <name>"
 
 // resolveDefaultBranch выбирает основную ветку: явный флаг побеждает автоопределение.
 func resolveDefaultBranch(repo *gitrepo.Repo, o Options) string {
@@ -55,23 +55,19 @@ func Plan(entries []classify.Entry, o Options) []classify.Entry {
 	return out
 }
 
-func plural(n int, one, few, many string) string {
-	switch {
-	case n%10 == 1 && n%100 != 11:
-		return one
-	case n%10 >= 2 && n%10 <= 4 && (n%100 < 10 || n%100 >= 20):
-		return few
-	default:
-		return many
+func pluralize(n int, singular, plural string) string {
+	if n == 1 {
+		return singular
 	}
+	return plural
 }
 
 func FormatEntry(e classify.Entry, now time.Time) string {
 	days := int(now.Sub(e.LastCommit).Hours() / 24)
-	age := fmt.Sprintf("%d %s назад", days, plural(days, "день", "дня", "дней"))
+	age := fmt.Sprintf("%d %s ago", days, pluralize(days, "day", "days"))
 	parts := []string{e.Name, age, fmt.Sprintf("+%d/−%d", e.Ahead, e.Behind), e.Category.String()}
 	if e.Protected {
-		parts = append(parts, "защищена: "+e.ProtectReason)
+		parts = append(parts, "protected: "+e.ProtectReason)
 	}
 	return strings.Join(parts, " · ")
 }
@@ -95,30 +91,30 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 	entries := classify.Build(branches, def, protect, now, o.StaleDays)
 
 	if len(entries) == 0 {
-		fmt.Fprintf(out, "кроме %s веток нет — убирать нечего\n", def)
+		fmt.Fprintf(out, "no branches besides %s — nothing to clean\n", def)
 		return 0, nil
 	}
 
 	plan := Plan(entries, o)
 	if len(plan) == 0 {
 		if !o.Merged && !o.AllButDefault {
-			fmt.Fprintf(out, "веток: %d\n\n", len(entries))
+			fmt.Fprintf(out, "branches: %d\n\n", len(entries))
 			for _, e := range entries {
 				fmt.Fprintln(out, "  "+FormatEntry(e, now))
 			}
-			fmt.Fprintln(out, "\nчто удалять — скажи явно: --merged или --all-but-default")
+			fmt.Fprintln(out, "\nsay explicitly what to delete: --merged or --all-but-default")
 			return 0, nil
 		}
-		fmt.Fprintln(out, "под условия ничего не подошло")
+		fmt.Fprintln(out, "nothing matched")
 		return 0, nil
 	}
 
-	fmt.Fprintf(out, "к удалению %d %s:\n", len(plan), plural(len(plan), "ветка", "ветки", "веток"))
+	fmt.Fprintf(out, "to delete: %d %s\n", len(plan), pluralize(len(plan), "branch", "branches"))
 	for _, e := range plan {
 		fmt.Fprintln(out, "  "+FormatEntry(e, now))
 	}
 	if o.DryRun || !o.Yes {
-		fmt.Fprintln(out, "\nничего не удалено. добавь --yes, чтобы выполнить")
+		fmt.Fprintln(out, "\nnothing deleted. add --yes to do it")
 		return 0, nil
 	}
 
@@ -129,18 +125,18 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 			Category: e.Category.String(), At: time.Now(),
 		}); err != nil {
 			// без записи в журнал удаление необратимо — не удаляем
-			fmt.Fprintf(out, "%s пропущена: не удалось записать журнал (%v)\n", e.Name, err)
+			fmt.Fprintf(out, "%s skipped: could not write the journal (%v)\n", e.Name, err)
 			failed++
 			continue
 		}
 		if err := repo.Delete(e.Name, o.Force || e.SquashMerged || e.Category != classify.Merged); err != nil {
-			fmt.Fprintf(out, "не удалось удалить %s: %v\n", e.Name, err)
+			fmt.Fprintf(out, "could not delete %s: %v\n", e.Name, err)
 			failed++
 			continue
 		}
-		fmt.Fprintf(out, "удалена %s\n", e.Name)
+		fmt.Fprintf(out, "deleted %s\n", e.Name)
 	}
-	fmt.Fprintf(out, "\nвосстановить: git nanny restore\n")
+	fmt.Fprintf(out, "\nto restore: git nanny restore\n")
 	if failed > 0 {
 		return 1, nil
 	}
@@ -165,7 +161,7 @@ func RunInteractive(dir string, o Options, out io.Writer) (int, error) {
 	protect := append(append([]string{}, repo.ProtectPatterns()...), o.Protect...)
 	entries := classify.Build(branches, def, protect, now, o.StaleDays)
 	if len(entries) == 0 {
-		fmt.Fprintf(out, "кроме %s веток нет — убирать нечего\n", def)
+		fmt.Fprintf(out, "no branches besides %s — nothing to clean\n", def)
 		return 0, nil
 	}
 	chosen, err := ui.Select(entries, now, o.Force)
@@ -173,7 +169,7 @@ func RunInteractive(dir string, o Options, out io.Writer) (int, error) {
 		return 1, err
 	}
 	if len(chosen) == 0 {
-		fmt.Fprintln(out, "ничего не выбрано")
+		fmt.Fprintln(out, "nothing selected")
 		return 0, nil
 	}
 	var failed int
@@ -183,18 +179,18 @@ func RunInteractive(dir string, o Options, out io.Writer) (int, error) {
 			Category: e.Category.String(), At: time.Now(),
 		}); err != nil {
 			// без записи в журнал удаление необратимо — не удаляем
-			fmt.Fprintf(out, "%s пропущена: не удалось записать журнал (%v)\n", e.Name, err)
+			fmt.Fprintf(out, "%s skipped: could not write the journal (%v)\n", e.Name, err)
 			failed++
 			continue
 		}
 		if err := repo.Delete(e.Name, true); err != nil {
-			fmt.Fprintf(out, "не удалось удалить %s: %v\n", e.Name, err)
+			fmt.Fprintf(out, "could not delete %s: %v\n", e.Name, err)
 			failed++
 			continue
 		}
-		fmt.Fprintf(out, "удалена %s\n", e.Name)
+		fmt.Fprintf(out, "deleted %s\n", e.Name)
 	}
-	fmt.Fprintln(out, "\nвосстановить: git nanny restore")
+	fmt.Fprintln(out, "\nto restore: git nanny restore")
 	if failed > 0 {
 		return 1, nil
 	}

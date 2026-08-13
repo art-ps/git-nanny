@@ -125,15 +125,19 @@ func (m model) View() string {
 	var b strings.Builder
 	if m.confirm {
 		names := m.selectedNames()
-		b.WriteString(accent.Render(fmt.Sprintf("удалить %d веток?", len(names))) + "\n\n")
+		word := "branches"
+		if len(names) == 1 {
+			word = "branch"
+		}
+		b.WriteString(accent.Render(fmt.Sprintf("delete %d %s?", len(names), word)) + "\n\n")
 		for _, n := range names {
 			b.WriteString("  " + n + "\n")
 		}
-		b.WriteString(dim.Render("\ny — удалить · любая другая клавиша — назад") + "\n")
+		b.WriteString(dim.Render("\ny — delete · any other key — back") + "\n")
 		return b.String()
 	}
 
-	b.WriteString("нянька для веток · пробел — отметить · a — все · enter — удалить · q — выход\n\n")
+	b.WriteString("branch nanny · space — toggle · a — all · enter — delete · q — quit\n\n")
 	for i, e := range m.entries {
 		cursor := "  "
 		if i == m.cursor {
@@ -144,13 +148,13 @@ func (m model) View() string {
 			box = "[×]"
 		}
 		days := int(m.now.Sub(e.LastCommit).Hours() / 24)
-		line := fmt.Sprintf("%s%s %s · %d дн · +%d/−%d · %s",
+		line := fmt.Sprintf("%s%s %s · %d d · +%d/−%d · %s",
 			cursor, box, e.Name, days, e.Ahead, e.Behind, e.Category.String())
 		switch {
 		case !e.Deletable(m.force):
 			reason := e.ProtectReason
 			if reason == "" {
-				reason = "есть уникальные коммиты"
+				reason = "has unique commits"
 			}
 			b.WriteString(dim.Render(fmt.Sprintf("%s    %s · %s", cursor, e.Name, reason)) + "\n")
 			continue

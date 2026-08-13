@@ -35,15 +35,15 @@ func main() {
 	var o Options
 	var protect multiFlag
 	var showVersion bool
-	flag.BoolVar(&showVersion, "version", false, "показать версию и выйти")
-	flag.BoolVar(&o.Merged, "merged", false, "только вмёрженные ветки")
-	flag.BoolVar(&o.AllButDefault, "all-but-default", false, "все ветки, кроме основной и защищённых")
-	flag.BoolVar(&o.DryRun, "dry-run", false, "только показать план")
-	flag.BoolVar(&o.Yes, "yes", false, "выполнить без вопросов")
-	flag.BoolVar(&o.Force, "force", false, "удалять и ветки с уникальными коммитами")
-	flag.IntVar(&o.StaleDays, "stale-days", 90, "сколько дней без коммитов считать заброшенностью")
-	flag.StringVar(&o.DefaultBranch, "default-branch", "", "имя основной ветки (побеждает автоопределение)")
-	flag.Var(&protect, "protect", "шаблон защищённых веток (можно повторять)")
+	flag.BoolVar(&showVersion, "version", false, "print version and exit")
+	flag.BoolVar(&o.Merged, "merged", false, "merged branches only")
+	flag.BoolVar(&o.AllButDefault, "all-but-default", false, "every branch except the default and protected ones")
+	flag.BoolVar(&o.DryRun, "dry-run", false, "only show the plan")
+	flag.BoolVar(&o.Yes, "yes", false, "run without asking")
+	flag.BoolVar(&o.Force, "force", false, "also delete branches with unique commits")
+	flag.IntVar(&o.StaleDays, "stale-days", 90, "days without commits to consider a branch abandoned")
+	flag.StringVar(&o.DefaultBranch, "default-branch", "", "default branch name (overrides autodetection)")
+	flag.Var(&protect, "protect", "glob of protected branches (repeatable)")
 	flag.Parse()
 	o.Protect = protect
 
@@ -68,7 +68,7 @@ func main() {
 		}
 		return
 	default:
-		fmt.Fprintf(os.Stderr, "неизвестная подкоманда %q (известна только restore)\n", arg)
+		fmt.Fprintf(os.Stderr, "unknown subcommand %q (only restore is known)\n", arg)
 		os.Exit(2)
 	}
 
@@ -106,7 +106,7 @@ func runRestore(dir string) error {
 		return err
 	}
 	if len(recs) == 0 {
-		fmt.Println("журнал пуст — этой утилитой здесь ничего не удалялось")
+		fmt.Println("journal is empty — nothing was deleted here with this tool")
 		return nil
 	}
 	for _, r := range recs {
@@ -117,6 +117,6 @@ func runRestore(dir string) error {
 		fmt.Printf("%s · %s · %s · %s\n",
 			r.Branch, short, r.Category, r.At.Format(time.RFC3339))
 	}
-	fmt.Println("\nвернуть ветку: git branch <имя> <sha>")
+	fmt.Println("\nrestore a branch: git branch <name> <sha>")
 	return nil
 }

@@ -18,7 +18,7 @@ type Repo struct{ dir string }
 func Open(dir string) (*Repo, error) {
 	r := &Repo{dir: dir}
 	if out, err := r.git("rev-parse", "--git-dir"); err != nil {
-		return nil, fmt.Errorf("не git-репозиторий: %s", out)
+		return nil, fmt.Errorf("not a git repository: %s", out)
 	}
 	// журнал должен находиться независимо от того, из какого подкаталога
 	// репозитория запущена утилита — ключом служит корень, а не рабочий каталог
@@ -102,7 +102,7 @@ func (r *Repo) Branches(defaultBranch string) ([]classify.Branch, error) {
 	}, sep)
 	out, err := r.git("for-each-ref", "--format="+format, "refs/heads")
 	if err != nil {
-		return nil, fmt.Errorf("не удалось прочитать ветки: %s", out)
+		return nil, fmt.Errorf("could not read branches: %s", out)
 	}
 	inWorktree := r.worktreeBranches()
 	cur, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
@@ -157,7 +157,7 @@ func (r *Repo) aheadBehind(base, name string) (ahead, behind int, err error) {
 	}
 	f := strings.Fields(out)
 	if len(f) != 2 {
-		return 0, 0, fmt.Errorf("неожиданный вывод rev-list: %q", out)
+		return 0, 0, fmt.Errorf("unexpected rev-list output: %q", out)
 	}
 	if behind, err = strconv.Atoi(f[0]); err != nil {
 		return 0, 0, err

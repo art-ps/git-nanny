@@ -18,7 +18,7 @@ func TestProtectedEntryCannotBeChecked(t *testing.T) {
 		{
 			Branch:    classify.Branch{Name: "main", LastCommit: now},
 			Category:  classify.Active,
-			Protected: true, ProtectReason: "основная",
+			Protected: true, ProtectReason: "default",
 		},
 	}
 	m := newModel(entries, now, false)

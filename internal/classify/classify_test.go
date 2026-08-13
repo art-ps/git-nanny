@@ -52,10 +52,10 @@ func TestBuildProtects(t *testing.T) {
 		byName[e.Name] = e
 	}
 	for name, reason := range map[string]string{
-		"main":        "основная",
-		"feature/x":   "текущая",
-		"hotfix":      "занята worktree",
-		"release/1.2": "защищена шаблоном release/*",
+		"main":        "default",
+		"feature/x":   "current",
+		"hotfix":      "in use by a worktree",
+		"release/1.2": "protected by pattern release/*",
 	} {
 		if !byName[name].Protected {
 			t.Errorf("%s должна быть защищена", name)
@@ -83,7 +83,7 @@ func TestBuildProtectMatchesAncestors(t *testing.T) {
 	if !got[0].Protected {
 		t.Fatal("release/v2/hotfix должна быть защищена шаблоном release/* через предка release/v2")
 	}
-	if got[0].ProtectReason != "защищена шаблоном release/*" {
+	if got[0].ProtectReason != "protected by pattern release/*" {
 		t.Errorf("причина %q неожиданная", got[0].ProtectReason)
 	}
 }

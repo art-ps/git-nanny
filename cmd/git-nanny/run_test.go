@@ -95,7 +95,7 @@ func TestFormatEntryShowsReasonAndAge(t *testing.T) {
 		Category: classify.Merged,
 	}
 	s := FormatEntry(e, day(0))
-	for _, want := range []string{"feature/x", "94 дня назад", "−128", "вмёржена"} {
+	for _, want := range []string{"feature/x", "94 days ago", "−128", "merged"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("в строке %q нет %q", s, want)
 		}
@@ -149,7 +149,7 @@ func TestRunSkipsDeletionWhenJournalFails(t *testing.T) {
 	if code != 1 {
 		t.Errorf("код возврата %d, ждали 1", code)
 	}
-	if !strings.Contains(buf.String(), "не удалось записать журнал") {
+	if !strings.Contains(buf.String(), "could not write the journal") {
 		t.Errorf("нет сообщения о сбое журнала: %s", buf.String())
 	}
 	out, _ := exec.Command("git", "-C", dir, "branch", "--list", "merged").Output()
@@ -211,7 +211,7 @@ func TestRunNoDeleteWhenDefaultBranchUnknown(t *testing.T) {
 	if code != 1 {
 		t.Errorf("код возврата %d, ждали 1", code)
 	}
-	if !strings.Contains(buf.String(), "основную ветку") {
+	if !strings.Contains(buf.String(), "default branch") {
 		t.Errorf("нет объяснения про основную ветку: %s", buf.String())
 	}
 	for _, name := range []string{"develop", "feature"} {
