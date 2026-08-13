@@ -1,6 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -74,5 +78,61 @@ func TestFormatEntryShowsReasonAndAge(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("в строке %q нет %q", s, want)
 		}
+	}
+}
+
+func TestPlanWithoutScopeIsEmpty(t *testing.T) {
+	if got := Plan(entries(), Options{}); len(got) != 0 {
+		t.Fatalf("без области действия план должен быть пуст, получили %v", names(got))
+	}
+	if got := Plan(entries(), Options{Force: true}); len(got) != 0 {
+		t.Fatalf("--force сам по себе не задаёт область, получили %v", names(got))
+	}
+	if got := Plan(entries(), Options{DryRun: true}); len(got) != 0 {
+		t.Fatalf("--dry-run сам по себе не задаёт область, получили %v", names(got))
+	}
+}
+
+func TestRunSkipsDeletionWhenJournalFails(t *testing.T) {
+	// XDG_STATE_HOME указывает на файл — MkdirAll под него не сработает
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_STATE_HOME", blocker)
+
+	dir := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(cmd.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q", "-b", "main", ".")
+	git("commit", "-q", "--allow-empty", "-m", "init")
+	git("checkout", "-q", "-b", "merged")
+	git("commit", "-q", "--allow-empty", "-m", "x")
+	git("checkout", "-q", "main")
+	git("merge", "-q", "--no-ff", "-m", "m", "merged")
+
+	var buf bytes.Buffer
+	code, err := Run(dir, Options{Merged: true, Yes: true, StaleDays: 90}, &buf)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if code != 1 {
+		t.Errorf("код возврата %d, ждали 1", code)
+	}
+	if !strings.Contains(buf.String(), "не удалось записать журнал") {
+		t.Errorf("нет сообщения о сбое журнала: %s", buf.String())
+	}
+	out, _ := exec.Command("git", "-C", dir, "branch", "--list", "merged").Output()
+	if !strings.Contains(string(out), "merged") {
+		t.Error("ветка удалена, хотя журнал не записался — восстановить её нечем")
 	}
 }

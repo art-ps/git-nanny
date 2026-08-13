@@ -24,6 +24,11 @@ type Options struct {
 // Plan — что снесём в неинтерактивном режиме. Защита и правило уникальных коммитов
 // живут в classify.Entry.Deletable, здесь только выбор набора.
 func Plan(entries []classify.Entry, o Options) []classify.Entry {
+	// без явно выбранной области ничего не удаляем: голый запуск не должен
+	// вести себя как --all-but-default
+	if !o.Merged && !o.AllButDefault {
+		return nil
+	}
 	var out []classify.Entry
 	for _, e := range entries {
 		if !e.Deletable(o.Force) {
@@ -69,7 +74,7 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 		return 1, err
 	}
 	now := time.Now()
-	protect := append(repo.ProtectPatterns(), o.Protect...)
+	protect := append(append([]string{}, repo.ProtectPatterns()...), o.Protect...)
 	entries := classify.Build(branches, def, protect, now, o.StaleDays)
 
 	if len(entries) == 0 {
@@ -79,6 +84,14 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 
 	plan := Plan(entries, o)
 	if len(plan) == 0 {
+		if !o.Merged && !o.AllButDefault {
+			fmt.Fprintf(out, "веток: %d\n\n", len(entries))
+			for _, e := range entries {
+				fmt.Fprintln(out, "  "+FormatEntry(e, now))
+			}
+			fmt.Fprintln(out, "\nчто удалять — скажи явно: --merged или --all-but-default")
+			return 0, nil
+		}
 		fmt.Fprintln(out, "под условия ничего не подошло")
 		return 0, nil
 	}
@@ -94,10 +107,15 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 
 	var failed int
 	for _, e := range plan {
-		_ = journal.Append(journal.Record{
+		if err := journal.Append(journal.Record{
 			Repo: repo.Dir(), Branch: e.Name, Head: e.Head,
 			Category: e.Category.String(), At: time.Now(),
-		})
+		}); err != nil {
+			// без записи в журнал удаление необратимо — не удаляем
+			fmt.Fprintf(out, "%s пропущена: не удалось записать журнал (%v)\n", e.Name, err)
+			failed++
+			continue
+		}
 		if err := repo.Delete(e.Name, o.Force || e.Category != classify.Merged); err != nil {
 			fmt.Fprintf(out, "не удалось удалить %s: %v\n", e.Name, err)
 			failed++

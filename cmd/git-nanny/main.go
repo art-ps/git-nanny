@@ -63,8 +63,12 @@ func runRestore(dir string) error {
 		return nil
 	}
 	for _, r := range recs {
+		short := r.Head
+		if len(short) > 7 {
+			short = short[:7]
+		}
 		fmt.Printf("%s · %s · %s · %s\n",
-			r.Branch, r.Head[:7], r.Category, r.At.Format(time.RFC3339))
+			r.Branch, short, r.Category, r.At.Format(time.RFC3339))
 	}
 	fmt.Println("\nвернуть ветку: git branch <имя> <sha>")
 	return nil
