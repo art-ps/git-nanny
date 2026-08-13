@@ -2,7 +2,11 @@
 // всё, что нужно, приходит в структуре Branch — поэтому логика проверяется юнит-тестами.
 package classify
 
-import "time"
+import (
+	"path"
+	"sort"
+	"time"
+)
 
 type Category int
 
@@ -49,4 +53,54 @@ func Classify(b Branch, now time.Time, staleDays int) Category {
 	default:
 		return Active
 	}
+}
+
+type Entry struct {
+	Branch
+	Category      Category
+	Protected     bool
+	ProtectReason string
+}
+
+func Build(branches []Branch, defaultBranch string, protect []string, now time.Time, staleDays int) []Entry {
+	out := make([]Entry, 0, len(branches))
+	for _, b := range branches {
+		e := Entry{Branch: b, Category: Classify(b, now, staleDays)}
+		switch {
+		case b.Current:
+			e.Protected, e.ProtectReason = true, "текущая"
+		case b.Name == defaultBranch:
+			e.Protected, e.ProtectReason = true, "основная"
+		case b.InWorktree:
+			e.Protected, e.ProtectReason = true, "занята worktree"
+		default:
+			for _, pat := range protect {
+				if ok, err := path.Match(pat, b.Name); err == nil && ok {
+					e.Protected, e.ProtectReason = true, "защищена шаблоном "+pat
+					break
+				}
+			}
+		}
+		out = append(out, e)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Category != out[j].Category {
+			return out[i].Category < out[j].Category
+		}
+		if !out[i].LastCommit.Equal(out[j].LastCommit) {
+			return out[i].LastCommit.Before(out[j].LastCommit)
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
+}
+
+func (e Entry) Deletable(force bool) bool {
+	if e.Protected {
+		return false
+	}
+	if e.Category != Merged && e.Ahead > 0 && !force {
+		return false
+	}
+	return true
 }
