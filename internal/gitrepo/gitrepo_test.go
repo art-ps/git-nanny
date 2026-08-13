@@ -129,3 +129,26 @@ func TestAheadBehindErrorMeansNotMerged(t *testing.T) {
 		t.Error("ветка пропала из выдачи при сбое подсчёта")
 	}
 }
+
+func TestDeleteAndRestore(t *testing.T) {
+	dir := newTestRepo(t)
+	gitIn(t, dir, "checkout", "-q", "-b", "doomed")
+	commitFile(t, dir, "d.txt", "1")
+	head := gitIn(t, dir, "rev-parse", "doomed")
+	gitIn(t, dir, "checkout", "-q", "main")
+
+	r, _ := Open(dir)
+	if err := r.Delete("doomed", true); err != nil {
+		t.Fatalf("удаление: %v", err)
+	}
+	if bs, _ := r.Branches("main"); len(bs) != 0 {
+		t.Fatalf("ветка не удалена: %+v", bs)
+	}
+	if err := r.Restore("doomed", head); err != nil {
+		t.Fatalf("восстановление: %v", err)
+	}
+	bs, _ := r.Branches("main")
+	if len(bs) != 1 || bs[0].Name != "doomed" {
+		t.Fatal("ветка не восстановлена")
+	}
+}

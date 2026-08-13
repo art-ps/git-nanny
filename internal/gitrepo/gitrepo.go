@@ -161,3 +161,23 @@ func (r *Repo) squashMerged(base, name string) bool {
 	}
 	return true
 }
+
+func (r *Repo) Dir() string { return r.dir }
+
+func (r *Repo) Delete(name string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	if out, err := r.git("branch", flag, name); err != nil {
+		return fmt.Errorf("%s: %s", name, out)
+	}
+	return nil
+}
+
+func (r *Repo) Restore(name, head string) error {
+	if out, err := r.git("branch", name, head); err != nil {
+		return fmt.Errorf("%s: %s", name, out)
+	}
+	return nil
+}
