@@ -20,6 +20,18 @@ type Options struct {
 	Force         bool
 	StaleDays     int
 	Protect       []string
+	DefaultBranch string // побеждает автоопределение, если задан
+}
+
+const noDefaultBranchMsg = "не удалось определить основную ветку — " +
+	"задай её явно: git config nanny.defaultBranch <имя> или git nanny --default-branch <имя>"
+
+// resolveDefaultBranch выбирает основную ветку: явный флаг побеждает автоопределение.
+func resolveDefaultBranch(repo *gitrepo.Repo, o Options) string {
+	if o.DefaultBranch != "" {
+		return o.DefaultBranch
+	}
+	return repo.DefaultBranch()
 }
 
 // Plan — что снесём в неинтерактивном режиме. Защита и правило уникальных коммитов
@@ -69,7 +81,11 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	def := repo.DefaultBranch()
+	def := resolveDefaultBranch(repo, o)
+	if def == "" {
+		fmt.Fprintln(out, noDefaultBranchMsg)
+		return 1, nil
+	}
 	branches, err := repo.Branches(def)
 	if err != nil {
 		return 1, err
@@ -117,7 +133,7 @@ func Run(dir string, o Options, out io.Writer) (int, error) {
 			failed++
 			continue
 		}
-		if err := repo.Delete(e.Name, o.Force || e.Category != classify.Merged); err != nil {
+		if err := repo.Delete(e.Name, o.Force || e.SquashMerged || e.Category != classify.Merged); err != nil {
 			fmt.Fprintf(out, "не удалось удалить %s: %v\n", e.Name, err)
 			failed++
 			continue
@@ -136,7 +152,11 @@ func RunInteractive(dir string, o Options, out io.Writer) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	def := repo.DefaultBranch()
+	def := resolveDefaultBranch(repo, o)
+	if def == "" {
+		fmt.Fprintln(out, noDefaultBranchMsg)
+		return 1, nil
+	}
 	branches, err := repo.Branches(def)
 	if err != nil {
 		return 1, err

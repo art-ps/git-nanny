@@ -3,6 +3,7 @@
 package gitrepo
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -17,19 +18,38 @@ type Repo struct{ dir string }
 func Open(dir string) (*Repo, error) {
 	r := &Repo{dir: dir}
 	if out, err := r.git("rev-parse", "--git-dir"); err != nil {
-		return nil, fmt.Errorf("не git-репозиторий: %s", strings.TrimSpace(out))
+		return nil, fmt.Errorf("не git-репозиторий: %s", out)
+	}
+	// журнал должен находиться независимо от того, из какого подкаталога
+	// репозитория запущена утилита — ключом служит корень, а не рабочий каталог
+	if top, err := r.git("rev-parse", "--show-toplevel"); err == nil && top != "" {
+		r.dir = top
 	}
 	return r, nil
 }
 
+// git запускает git и возвращает stdout. При ошибке возвращает текст stderr —
+// его, в отличие от CombinedOutput, никогда не примут за разбираемое значение.
 func (r *Repo) git(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = r.dir
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return strings.TrimSpace(stderr.String()), err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
+// DefaultBranch определяет основную ветку. Порядок важен: явная воля пользователя
+// побеждает всё остальное, а текущая ветка — самый ненадёжный сигнал и годится,
+// только если в репозитории вообще нет других веток-кандидатов. Если определить
+// не удалось, возвращает "" — вызывающий код обязан ничего не удалять в этом случае.
 func (r *Repo) DefaultBranch() string {
+	if out, err := r.git("config", "--get", "nanny.defaultBranch"); err == nil && out != "" {
+		return out
+	}
 	if out, err := r.git("symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil {
 		if name := strings.TrimPrefix(out, "origin/"); name != "" {
 			return name
@@ -40,8 +60,15 @@ func (r *Repo) DefaultBranch() string {
 			return name
 		}
 	}
-	cur, _ := r.git("rev-parse", "--abbrev-ref", "HEAD")
-	return cur
+	out, err := r.git("for-each-ref", "--format=%(refname:short)", "refs/heads")
+	if err != nil {
+		return ""
+	}
+	heads := strings.Split(out, "\n")
+	if len(heads) == 1 && heads[0] != "" {
+		return heads[0]
+	}
+	return ""
 }
 
 func (r *Repo) ProtectPatterns() []string {
@@ -78,7 +105,11 @@ func (r *Repo) Branches(defaultBranch string) ([]classify.Branch, error) {
 		return nil, fmt.Errorf("не удалось прочитать ветки: %s", out)
 	}
 	inWorktree := r.worktreeBranches()
-	cur, _ := r.git("rev-parse", "--abbrev-ref", "HEAD")
+	cur, err := r.git("rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		// не смогли определить текущую ветку — пустая строка, а не текст ошибки git
+		cur = ""
+	}
 
 	var res []classify.Branch
 	for _, line := range strings.Split(out, "\n") {
@@ -109,7 +140,10 @@ func (r *Repo) Branches(defaultBranch string) ([]classify.Branch, error) {
 			b.Ahead, b.Behind, b.Merged = 1, 0, false
 		} else {
 			b.Ahead, b.Behind = ahead, behind
-			b.Merged = b.Ahead == 0 || r.squashMerged(defaultBranch, name)
+			if b.Ahead != 0 {
+				b.SquashMerged = r.squashMerged(defaultBranch, name)
+			}
+			b.Merged = b.Ahead == 0 || b.SquashMerged
 		}
 		res = append(res, b)
 	}

@@ -10,6 +10,16 @@ import (
 	"github.com/art-ps/git-nanny/internal/journal"
 )
 
+// stdinIsInteractive — false, если стандартный ввод не терминал (труба, CI,
+// перенаправленный файл): в этом случае Bubble Tea падает с английской ошибкой.
+func stdinIsInteractive() bool {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
 type multiFlag []string
 
 func (m *multiFlag) String() string     { return "" }
@@ -24,6 +34,7 @@ func main() {
 	flag.BoolVar(&o.Yes, "yes", false, "выполнить без вопросов")
 	flag.BoolVar(&o.Force, "force", false, "удалять и ветки с уникальными коммитами")
 	flag.IntVar(&o.StaleDays, "stale-days", 90, "сколько дней без коммитов считать заброшенностью")
+	flag.StringVar(&o.DefaultBranch, "default-branch", "", "имя основной ветки (побеждает автоопределение)")
 	flag.Var(&protect, "protect", "шаблон защищённых веток (можно повторять)")
 	flag.Parse()
 	o.Protect = protect
@@ -34,15 +45,30 @@ func main() {
 		os.Exit(1)
 	}
 
-	if flag.Arg(0) == "restore" {
+	switch arg := flag.Arg(0); arg {
+	case "":
+		// без подкоманды — обычный режим
+	case "restore":
 		if err := runRestore(dir); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		return
+	default:
+		fmt.Fprintf(os.Stderr, "неизвестная подкоманда %q (известна только restore)\n", arg)
+		os.Exit(2)
 	}
 
 	if !o.Merged && !o.AllButDefault && !o.DryRun {
+		if !stdinIsInteractive() {
+			// нет терминала — Bubble Tea не сможет отрисоваться: показываем тот же
+			// список, что и обычный Run без области действия
+			code, err := Run(dir, o, os.Stdout)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+			os.Exit(code)
+		}
 		code, err := RunInteractive(dir, o, os.Stdout)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)

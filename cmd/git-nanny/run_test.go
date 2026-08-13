@@ -10,7 +10,28 @@ import (
 	"time"
 
 	"github.com/art-ps/git-nanny/internal/classify"
+	"github.com/art-ps/git-nanny/internal/gitrepo"
+	"github.com/art-ps/git-nanny/internal/journal"
 )
+
+// gitTestRepo — минимальный помощник для тестов Run: временный репозиторий и
+// команда git внутри него.
+func gitTestRepo(t *testing.T) (dir string, git func(args ...string)) {
+	t.Helper()
+	dir = t.TempDir()
+	git = func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(cmd.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return dir, git
+}
 
 func day(n int) time.Time {
 	return time.Date(2026, 8, 13, 12, 0, 0, 0, time.UTC).AddDate(0, 0, -n)
@@ -134,5 +155,109 @@ func TestRunSkipsDeletionWhenJournalFails(t *testing.T) {
 	out, _ := exec.Command("git", "-C", dir, "branch", "--list", "merged").Output()
 	if !strings.Contains(string(out), "merged") {
 		t.Error("ветка удалена, хотя журнал не записался — восстановить её нечем")
+	}
+}
+
+// TestRunDeletesSquashMergedBranch — регрессия на главный баг финального ревью:
+// `--merged --yes` должен уметь удалить ветку, влитую сквошем (`git branch -d`
+// откажет, т.к. коммит ветки не предок main; нужен force именно для неё).
+func TestRunDeletesSquashMergedBranch(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir, git := gitTestRepo(t)
+
+	git("init", "-q", "-b", "main", ".")
+	git("commit", "-q", "--allow-empty", "-m", "init")
+	git("checkout", "-q", "-b", "squashed")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "a.txt")
+	git("commit", "-q", "-m", "add a")
+	git("checkout", "-q", "main")
+	git("merge", "-q", "--squash", "squashed")
+	git("commit", "-q", "-m", "squash squashed")
+
+	var buf bytes.Buffer
+	code, err := Run(dir, Options{Merged: true, Yes: true, StaleDays: 90}, &buf)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("код возврата %d, ждали 0\n%s", code, buf.String())
+	}
+	out, _ := exec.Command("git", "-C", dir, "branch", "--list", "squashed").Output()
+	if strings.Contains(string(out), "squashed") {
+		t.Errorf("сквош-вмёрженная ветка не удалена:\n%s", buf.String())
+	}
+}
+
+// TestRunNoDeleteWhenDefaultBranchUnknown: репозиторий "git init -b develop" с
+// двумя ветками, без remote, стоя не на develop. Основную ветку определить
+// нельзя — Run обязан ничего не удалять и объяснить, как её задать.
+func TestRunNoDeleteWhenDefaultBranchUnknown(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir, git := gitTestRepo(t)
+
+	git("init", "-q", "-b", "develop", ".")
+	git("commit", "-q", "--allow-empty", "-m", "init")
+	git("checkout", "-q", "-b", "feature")
+	git("commit", "-q", "--allow-empty", "-m", "x")
+
+	var buf bytes.Buffer
+	code, err := Run(dir, Options{Merged: true, Yes: true, StaleDays: 90}, &buf)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if code != 1 {
+		t.Errorf("код возврата %d, ждали 1", code)
+	}
+	if !strings.Contains(buf.String(), "основную ветку") {
+		t.Errorf("нет объяснения про основную ветку: %s", buf.String())
+	}
+	for _, name := range []string{"develop", "feature"} {
+		out, _ := exec.Command("git", "-C", dir, "branch", "--list", name).Output()
+		if !strings.Contains(string(out), name) {
+			t.Errorf("ветка %s пропала, хотя основную ветку не определили", name)
+		}
+	}
+}
+
+// TestJournalFoundFromSubdirectory: запись об удалении, сделанная из подкаталога
+// репозитория, должна находиться journal.ForRepo по корню репозитория.
+func TestJournalFoundFromSubdirectory(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	dir, git := gitTestRepo(t)
+
+	git("init", "-q", "-b", "main", ".")
+	git("commit", "-q", "--allow-empty", "-m", "init")
+	git("checkout", "-q", "-b", "merged")
+	git("commit", "-q", "--allow-empty", "-m", "x")
+	git("checkout", "-q", "main")
+	git("merge", "-q", "--no-ff", "-m", "m", "merged")
+
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf bytes.Buffer
+	code, err := Run(sub, Options{Merged: true, Yes: true, StaleDays: 90}, &buf)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if code != 0 {
+		t.Fatalf("код возврата %d, ждали 0\n%s", code, buf.String())
+	}
+
+	repo, err := gitrepo.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recs, err := journal.ForRepo(repo.Dir(), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recs) != 1 || recs[0].Branch != "merged" {
+		t.Fatalf("запись об удалении из подкаталога не найдена по корню: %+v", recs)
 	}
 }

@@ -1,6 +1,8 @@
 package gitrepo
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -12,6 +14,66 @@ func TestDefaultBranchFallsBackToMain(t *testing.T) {
 	}
 	if got := r.DefaultBranch(); got != "main" {
 		t.Fatalf("основная ветка %q, ждали main", got)
+	}
+}
+
+// TestDefaultBranchEmptyWhenAmbiguous: репозиторий "git init -b develop" без
+// remote, с двумя ветками, ни main, ни master. Текущая ветка не должна
+// подставляться как основная — иначе develop (не текущая) окажется кандидатом
+// на удаление без --force.
+func TestDefaultBranchEmptyWhenAmbiguous(t *testing.T) {
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q", "-b", "develop")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+	gitIn(t, dir, "checkout", "-q", "-b", "feature")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "x")
+
+	r, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.DefaultBranch(); got != "" {
+		t.Fatalf("основная ветка %q, ждали пустую строку (неопределённость)", got)
+	}
+}
+
+// TestDefaultBranchHonorsConfig: nanny.defaultBranch — явная воля пользователя,
+// побеждает всё остальное, включая неоднозначность из теста выше.
+func TestDefaultBranchHonorsConfig(t *testing.T) {
+	dir := t.TempDir()
+	gitIn(t, dir, "init", "-q", "-b", "develop")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "init")
+	gitIn(t, dir, "checkout", "-q", "-b", "feature")
+	gitIn(t, dir, "commit", "-q", "--allow-empty", "-m", "x")
+	gitIn(t, dir, "config", "nanny.defaultBranch", "develop")
+
+	r, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := r.DefaultBranch(); got != "develop" {
+		t.Fatalf("основная ветка %q, ждали develop", got)
+	}
+}
+
+// TestOpenResolvesToRepoRoot: журнал должен находиться независимо от подкаталога,
+// из которого запущена утилита — ключом служит корень репозитория.
+func TestOpenResolvesToRepoRoot(t *testing.T) {
+	dir := newTestRepo(t)
+	sub := filepath.Join(dir, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fromRoot, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromSub, err := Open(sub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromRoot.Dir() != fromSub.Dir() {
+		t.Fatalf("корень из подкаталога %q, из корня %q — не совпадают", fromSub.Dir(), fromRoot.Dir())
 	}
 }
 

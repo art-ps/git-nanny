@@ -5,6 +5,7 @@ package classify
 import (
 	"path"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -38,6 +39,7 @@ type Branch struct {
 	Behind       int
 	UpstreamGone bool
 	Merged       bool // включая сквош-мерж
+	SquashMerged bool // содержимое влито сквошем: коммит ветки не предок основной, но `git branch -d` откажет
 	Current      bool
 	InWorktree   bool
 }
@@ -75,7 +77,7 @@ func Build(branches []Branch, defaultBranch string, protect []string, now time.T
 			e.Protected, e.ProtectReason = true, "занята worktree"
 		default:
 			for _, pat := range protect {
-				if ok, err := path.Match(pat, b.Name); err == nil && ok {
+				if matchesProtect(pat, b.Name) {
 					e.Protected, e.ProtectReason = true, "защищена шаблоном "+pat
 					break
 				}
@@ -93,6 +95,22 @@ func Build(branches []Branch, defaultBranch string, protect []string, now time.T
 		return out[i].Name < out[j].Name
 	})
 	return out
+}
+
+// matchesProtect проверяет шаблон против полного имени ветки и против всех его
+// предков по «/»: nanny.protect 'release/*' должен защищать и release/v2/hotfix,
+// а не только release/v2 — path.Match не пропускает '*' через '/'.
+func matchesProtect(pat, name string) bool {
+	for n := name; ; {
+		if ok, err := path.Match(pat, n); err == nil && ok {
+			return true
+		}
+		i := strings.LastIndex(n, "/")
+		if i < 0 {
+			return false
+		}
+		n = n[:i]
+	}
 }
 
 func (e Entry) Deletable(force bool) bool {

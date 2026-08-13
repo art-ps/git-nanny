@@ -72,6 +72,22 @@ func TestBuildProtects(t *testing.T) {
 	}
 }
 
+// TestBuildProtectMatchesAncestors: path.Match не пропускает '*' через '/',
+// поэтому nanny.protect 'release/*' сам по себе не защитит release/v2/hotfix.
+// Проверяем шаблон и против имени, и против всех его предков по '/'.
+func TestBuildProtectMatchesAncestors(t *testing.T) {
+	in := []Branch{
+		{Name: "release/v2/hotfix", LastCommit: at(1)},
+	}
+	got := Build(in, "main", []string{"release/*"}, now, 90)
+	if !got[0].Protected {
+		t.Fatal("release/v2/hotfix должна быть защищена шаблоном release/* через предка release/v2")
+	}
+	if got[0].ProtectReason != "защищена шаблоном release/*" {
+		t.Errorf("причина %q неожиданная", got[0].ProtectReason)
+	}
+}
+
 func TestBuildSorts(t *testing.T) {
 	in := []Branch{
 		{Name: "active-new", LastCommit: at(1)},
