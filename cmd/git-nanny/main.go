@@ -10,14 +10,16 @@ import (
 	"github.com/art-ps/git-nanny/internal/journal"
 )
 
-// stdinIsInteractive — false, если стандартный ввод не терминал (труба, CI,
-// перенаправленный файл): в этом случае Bubble Tea падает с английской ошибкой.
-func stdinIsInteractive() bool {
-	info, err := os.Stdin.Stat()
+// terminalAvailable — есть ли управляющий терминал. Проверяем ровно то, что
+// открывает Bubble Tea: перенаправленный stdin бывает символьным устройством
+// (/dev/null), поэтому os.ModeCharDevice тут не показатель.
+func terminalAvailable() bool {
+	f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
 		return false
 	}
-	return info.Mode()&os.ModeCharDevice != 0
+	_ = f.Close()
+	return true
 }
 
 type multiFlag []string
@@ -60,7 +62,7 @@ func main() {
 	}
 
 	if !o.Merged && !o.AllButDefault && !o.DryRun {
-		if !stdinIsInteractive() {
+		if !terminalAvailable() {
 			// нет терминала — Bubble Tea не сможет отрисоваться: показываем тот же
 			// список, что и обычный Run без области действия
 			code, err := Run(dir, o, os.Stdout)
