@@ -56,9 +56,11 @@ If the default branch cannot be resolved unambiguously (no `origin/HEAD`, no
 how to name it: `git config nanny.defaultBranch <name>` or
 `git nanny --default-branch <name>`.
 
-Branches with commits the default branch does not have are only deleted with
-`--force` — in the interactive list they are dimmed and marked "has unique
-commits", and the spacebar will not select them.
+`--force` applies to non-interactive runs: without it, branches with commits
+the default branch does not have are skipped. In the interactive list you can
+tick any branch that is not protected — a "has unique commits" note marks the
+ones that are not merged anywhere, and the confirm screen tells you how many
+of your picks are unmerged.
 
 Git does not record when a branch was created, so every row ends with
 `created 2006-01-02` — the date of the branch's first commit not present on

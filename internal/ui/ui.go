@@ -33,11 +33,20 @@ type model struct {
 func newModel(entries []classify.Entry, now time.Time, force bool) model {
 	m := model{entries: entries, checked: map[int]bool{}, now: now, force: force}
 	for i, e := range entries {
-		if e.Deletable(force) && (e.Category == classify.Merged || e.Category == classify.Gone) {
+		if preselectable(e) {
 			m.checked[i] = true
 		}
 	}
 	return m
+}
+
+// preselectable — набор веток, отмечаемых по умолчанию и клавишей "m":
+// смёрженные и с ушедшим апстримом, если ветка не защищена. Уникальные
+// коммиты здесь не проверяются — выбор консервативен по категории, а не
+// по Deletable: интерактивный список решает сам, non-interactive путь
+// по-прежнему гейтится Deletable(force) в cmd/git-nanny/run.go.
+func preselectable(e classify.Entry) bool {
+	return !e.Protected && (e.Category == classify.Merged || e.Category == classify.Gone)
 }
 
 func Select(entries []classify.Entry, now time.Time, force bool) ([]classify.Entry, error) {
@@ -92,12 +101,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor++
 		}
 	case " ":
-		if m.entries[m.cursor].Deletable(m.force) {
+		if !m.entries[m.cursor].Protected {
 			m.checked[m.cursor] = !m.checked[m.cursor]
 		}
 	case "a":
 		for i, e := range m.entries {
-			if e.Deletable(m.force) {
+			if !e.Protected {
+				m.checked[i] = true
+			}
+		}
+	case "m":
+		for i, e := range m.entries {
+			if preselectable(e) {
 				m.checked[i] = true
 			}
 		}
@@ -133,11 +148,18 @@ func (m model) View() string {
 		for _, n := range names {
 			b.WriteString("  " + n + "\n")
 		}
+		if unique := m.selectedUniqueCommits(); unique > 0 {
+			verb, be := "have", "are"
+			if unique == 1 {
+				verb, be = "has", "is"
+			}
+			b.WriteString(fmt.Sprintf("\n%d of them %s unique commits and %s not merged anywhere\n", unique, verb, be))
+		}
 		b.WriteString(dim.Render("\ny — delete · any other key — back") + "\n")
 		return b.String()
 	}
 
-	b.WriteString("branch nanny · space — toggle · a — all · enter — delete · q — quit\n\n")
+	b.WriteString("branch nanny · space — toggle · a — all · m — merged only · enter — delete · q — quit\n\n")
 	for i, e := range m.entries {
 		cursor := "  "
 		if i == m.cursor {
@@ -149,21 +171,40 @@ func (m model) View() string {
 		}
 		days := int(m.now.Sub(e.LastCommit).Hours() / 24)
 		created := e.Created.Format("2006-01-02")
-		line := fmt.Sprintf("%s%s %s · %d d · +%d/−%d · %s · created %s",
-			cursor, box, e.Name, days, e.Ahead, e.Behind, e.Category.String(), created)
-		switch {
-		case !e.Deletable(m.force):
+
+		if e.Protected {
 			reason := e.ProtectReason
 			if reason == "" {
-				reason = "has unique commits"
+				reason = "protected"
 			}
 			b.WriteString(dim.Render(fmt.Sprintf("%s    %s · %s · created %s", cursor, e.Name, reason, created)) + "\n")
 			continue
-		case i == m.cursor:
+		}
+
+		category := e.Category.String()
+		if e.Category != classify.Merged && e.Ahead > 0 {
+			category += " · has unique commits"
+		}
+		line := fmt.Sprintf("%s%s %s · %d d · +%d/−%d · %s · created %s",
+			cursor, box, e.Name, days, e.Ahead, e.Behind, category, created)
+		if i == m.cursor {
 			b.WriteString(selected.Render(line) + "\n")
-		default:
+		} else {
 			b.WriteString(line + "\n")
 		}
 	}
 	return b.String()
+}
+
+// selectedUniqueCommits считает отмеченные ветки, у которых есть коммиты,
+// не попавшие в default branch, и которые не помечены merged — для строки
+// на экране подтверждения.
+func (m model) selectedUniqueCommits() int {
+	n := 0
+	for i, e := range m.entries {
+		if m.checked[i] && e.Category != classify.Merged && e.Ahead > 0 {
+			n++
+		}
+	}
+	return n
 }

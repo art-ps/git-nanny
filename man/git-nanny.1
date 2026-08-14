@@ -64,7 +64,8 @@ Run without asking. Required for any non\-interactive deletion.
 Only show the plan, delete nothing.
 .TP
 .B \-force
-Also delete branches that have commits the default branch does not.
+Also delete branches that have commits the default branch does not. Applies
+only to non\-interactive runs \- see below.
 .TP
 .BI \-stale\-days " n"
 Days without commits before a branch counts as abandoned. Default 90.
@@ -86,6 +87,15 @@ a non\-interactive run deletes nothing: it prints the branch list and asks you
 to name a scope. Branches with unique commits are skipped unless
 .B \-force
 is given.
+.PP
+This
+.B \-force
+gate is a non\-interactive protection: in the interactive list you can tick
+any branch that is not protected, including ones with unique commits \- a
+row marked
+.I "has unique commits"
+tells you it is not merged anywhere, and the confirm screen counts how many
+of your picks are unmerged before you commit to deleting them.
 .SH COMMANDS
 .TP
 .B restore
