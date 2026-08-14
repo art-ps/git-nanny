@@ -26,6 +26,11 @@ Every deletion is written to a journal first, so any branch can be restored
 afterwards. See
 .B JOURNAL
 below.
+.PP
+Git does not record when a branch was created, so every row ends with the
+committer date of the branch's first commit not present on the default
+branch, formatted
+.IR "created 2006\-01\-02" .
 .SH CATEGORIES
 Each branch gets exactly one category, which also sets the sort order.
 .TP

@@ -133,6 +133,7 @@ func (r *Repo) Branches(defaultBranch string) ([]classify.Branch, error) {
 			Current:      strings.TrimSpace(f[4]) == "*" || name == cur,
 			InWorktree:   inWorktree[name] && name != cur,
 		}
+		b.Created = r.createdAt(defaultBranch, name, b.LastCommit)
 		ahead, behind, err := r.aheadBehind(defaultBranch, name)
 		if err != nil {
 			// не смогли посчитать — считаем ветку живой: пометить «вмёржена» здесь
@@ -148,6 +149,21 @@ func (r *Repo) Branches(defaultBranch string) ([]classify.Branch, error) {
 		res = append(res, b)
 	}
 	return res, nil
+}
+
+// createdAt — дата первого коммита, уникального для ветки: git не хранит
+// момент создания ветки. Пусто (ветка целиком внутри основной) — берём верхушку.
+func (r *Repo) createdAt(base, name string, fallback time.Time) time.Time {
+	out, err := r.git("log", "--reverse", "--format=%ct", base+".."+name)
+	if err != nil || out == "" {
+		return fallback
+	}
+	first := strings.SplitN(out, "\n", 2)[0]
+	ts, err := strconv.ParseInt(strings.TrimSpace(first), 10, 64)
+	if err != nil {
+		return fallback
+	}
+	return time.Unix(ts, 0)
 }
 
 func (r *Repo) aheadBehind(base, name string) (ahead, behind int, err error) {

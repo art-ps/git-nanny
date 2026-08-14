@@ -91,7 +91,10 @@ func TestPlanAllButDefaultWithForce(t *testing.T) {
 
 func TestFormatEntryShowsReasonAndAge(t *testing.T) {
 	e := classify.Entry{
-		Branch:   classify.Branch{Name: "feature/x", LastCommit: day(94), Behind: 128},
+		Branch: classify.Branch{
+			Name: "feature/x", LastCommit: day(94), Behind: 128,
+			Created: time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC),
+		},
 		Category: classify.Merged,
 	}
 	s := FormatEntry(e, day(0))
@@ -99,6 +102,9 @@ func TestFormatEntryShowsReasonAndAge(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("в строке %q нет %q", s, want)
 		}
+	}
+	if !strings.HasSuffix(s, "created 2026-05-04") {
+		t.Errorf("строка %q не оканчивается датой создания", s)
 	}
 }
 

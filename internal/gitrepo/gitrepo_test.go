@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestDefaultBranchFallsBackToMain(t *testing.T) {
@@ -189,6 +190,73 @@ func TestAheadBehindErrorMeansNotMerged(t *testing.T) {
 	}
 	if !found {
 		t.Error("ветка пропала из выдачи при сбое подсчёта")
+	}
+}
+
+// TestBranchesCreatedIsFirstUniqueCommit: git не хранит дату создания ветки, поэтому
+// Created берётся с первого коммита, уникального для ветки — не с последнего.
+func TestBranchesCreatedIsFirstUniqueCommit(t *testing.T) {
+	dir := newTestRepo(t)
+	first := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	second := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	gitIn(t, dir, "checkout", "-q", "-b", "feature")
+	commitFileAt(t, dir, "a.txt", "1", first)
+	commitFileAt(t, dir, "b.txt", "2", second)
+	gitIn(t, dir, "checkout", "-q", "main")
+
+	r, _ := Open(dir)
+	bs, err := r.Branches("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got time.Time
+	var found bool
+	for _, b := range bs {
+		if b.Name == "feature" {
+			got, found = b.Created, true
+		}
+	}
+	if !found {
+		t.Fatal("ветка feature не найдена")
+	}
+	if !got.Equal(first) {
+		t.Fatalf("Created = %v, ждали дату первого уникального коммита %v", got, first)
+	}
+}
+
+// TestBranchesCreatedFallsBackToTipWhenFullyMerged: после обычного --no-ff мержа
+// main..branch пуст (коммит ветки уже предок main через мерж) — Created должен
+// откатиться на дату верхушки ветки, а не остаться нулевым временем.
+func TestBranchesCreatedFallsBackToTipWhenFullyMerged(t *testing.T) {
+	dir := newTestRepo(t)
+	tipTime := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+
+	gitIn(t, dir, "checkout", "-q", "-b", "plain")
+	commitFileAt(t, dir, "p.txt", "1", tipTime)
+	gitIn(t, dir, "checkout", "-q", "main")
+	gitIn(t, dir, "merge", "-q", "--no-ff", "-m", "merge plain", "plain")
+
+	r, _ := Open(dir)
+	bs, err := r.Branches("main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got time.Time
+	var found bool
+	for _, b := range bs {
+		if b.Name == "plain" {
+			got, found = b.Created, true
+		}
+	}
+	if !found {
+		t.Fatal("ветка plain не найдена")
+	}
+	if got.IsZero() {
+		t.Fatal("Created нулевой — fallback на верхушку не сработал")
+	}
+	if !got.Equal(tipTime) {
+		t.Fatalf("Created = %v, ждали дату верхушки %v", got, tipTime)
 	}
 }
 

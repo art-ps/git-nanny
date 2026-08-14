@@ -60,6 +60,10 @@ Branches with commits the default branch does not have are only deleted with
 `--force` — in the interactive list they are dimmed and marked "has unique
 commits", and the spacebar will not select them.
 
+Git does not record when a branch was created, so every row ends with
+`created 2006-01-02` — the date of the branch's first commit not present on
+the default branch.
+
 ## What it does not do
 
 It does not touch branches on the remote, does not merge, does not switch.

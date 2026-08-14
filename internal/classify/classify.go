@@ -42,6 +42,7 @@ type Branch struct {
 	SquashMerged bool // содержимое влито сквошем: коммит ветки не предок основной, но `git branch -d` откажет
 	Current      bool
 	InWorktree   bool
+	Created      time.Time // дата первого коммита, уникального для ветки: git не хранит момент создания ветки
 }
 
 func Classify(b Branch, now time.Time, staleDays int) Category {

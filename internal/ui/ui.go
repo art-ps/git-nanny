@@ -148,15 +148,16 @@ func (m model) View() string {
 			box = "[×]"
 		}
 		days := int(m.now.Sub(e.LastCommit).Hours() / 24)
-		line := fmt.Sprintf("%s%s %s · %d d · +%d/−%d · %s",
-			cursor, box, e.Name, days, e.Ahead, e.Behind, e.Category.String())
+		created := e.Created.Format("2006-01-02")
+		line := fmt.Sprintf("%s%s %s · %d d · +%d/−%d · %s · created %s",
+			cursor, box, e.Name, days, e.Ahead, e.Behind, e.Category.String(), created)
 		switch {
 		case !e.Deletable(m.force):
 			reason := e.ProtectReason
 			if reason == "" {
 				reason = "has unique commits"
 			}
-			b.WriteString(dim.Render(fmt.Sprintf("%s    %s · %s", cursor, e.Name, reason)) + "\n")
+			b.WriteString(dim.Render(fmt.Sprintf("%s    %s · %s · created %s", cursor, e.Name, reason, created)) + "\n")
 			continue
 		case i == m.cursor:
 			b.WriteString(selected.Render(line) + "\n")

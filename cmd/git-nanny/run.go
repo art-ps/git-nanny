@@ -69,6 +69,7 @@ func FormatEntry(e classify.Entry, now time.Time) string {
 	if e.Protected {
 		parts = append(parts, "protected: "+e.ProtectReason)
 	}
+	parts = append(parts, "created "+e.Created.Format("2006-01-02"))
 	return strings.Join(parts, " · ")
 }
 
