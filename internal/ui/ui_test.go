@@ -11,7 +11,7 @@ import (
 
 // TestProtectedEntryCannotBeChecked: защищённую запись нельзя отметить ни
 // пробелом, ни клавишей "a" (отметить всё) — что бы ни делал пользователь,
-// Deletable(force) остаётся false для неё.
+// e.Protected остаётся true, и оба гейта её пропускают.
 func TestProtectedEntryCannotBeChecked(t *testing.T) {
 	now := time.Now()
 	entries := []classify.Entry{
@@ -21,7 +21,7 @@ func TestProtectedEntryCannotBeChecked(t *testing.T) {
 			Protected: true, ProtectReason: "default",
 		},
 	}
-	m := newModel(entries, now, false)
+	m := newModel(entries, now)
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = next.(model)
@@ -47,7 +47,7 @@ func TestUniqueCommitsEntryCanBeCheckedBySpace(t *testing.T) {
 			Category: classify.Active,
 		},
 	}
-	m := newModel(entries, now, false)
+	m := newModel(entries, now)
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
 	m = next.(model)
@@ -71,7 +71,7 @@ func TestSelectAllChecksUniqueCommitsButNotProtected(t *testing.T) {
 			Protected: true, ProtectReason: "default",
 		},
 	}
-	m := newModel(entries, now, false)
+	m := newModel(entries, now)
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
 	m = next.(model)
@@ -84,7 +84,12 @@ func TestSelectAllChecksUniqueCommitsButNotProtected(t *testing.T) {
 }
 
 // TestMergedOnlyKeyChecksMergedNotUnique: "m" отмечает merged-ветку, но не
-// трогает незащищённую ветку с уникальными коммитами.
+// трогает незащищённую ветку с уникальными коммитами. Предвыбор в newModel
+// уже отмечает запись 0 (Category: Merged), а неизвестная клавиша в Update —
+// no-op, так что без явного снятия предвыбора клавишей "n" тест прошёл бы и
+// без кейса "m" в Update. Снимаем всё "n", проверяем, что ничего не осталось
+// отмеченным, и только потом жмём "m" — так отметка может появиться только
+// от неё.
 func TestMergedOnlyKeyChecksMergedNotUnique(t *testing.T) {
 	now := time.Now()
 	entries := []classify.Entry{
@@ -97,9 +102,15 @@ func TestMergedOnlyKeyChecksMergedNotUnique(t *testing.T) {
 			Category: classify.Active,
 		},
 	}
-	m := newModel(entries, now, false)
+	m := newModel(entries, now)
 
-	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	m = next.(model)
+	if len(m.selectedNames()) != 0 {
+		t.Fatalf("после n не должно остаться отметок: %v", m.selectedNames())
+	}
+
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
 	m = next.(model)
 	if !m.checked[0] {
 		t.Fatal("клавиша m не отметила merged-ветку")

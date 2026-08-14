@@ -27,11 +27,10 @@ type model struct {
 	done      bool
 	cancelled bool
 	now       time.Time
-	force     bool
 }
 
-func newModel(entries []classify.Entry, now time.Time, force bool) model {
-	m := model{entries: entries, checked: map[int]bool{}, now: now, force: force}
+func newModel(entries []classify.Entry, now time.Time) model {
+	m := model{entries: entries, checked: map[int]bool{}, now: now}
 	for i, e := range entries {
 		if preselectable(e) {
 			m.checked[i] = true
@@ -50,7 +49,7 @@ func preselectable(e classify.Entry) bool {
 }
 
 func Select(entries []classify.Entry, now time.Time, force bool) ([]classify.Entry, error) {
-	m := newModel(entries, now, force)
+	m := newModel(entries, now)
 	res, err := tea.NewProgram(m).Run()
 	if err != nil {
 		return nil, err
